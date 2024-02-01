@@ -1,5 +1,11 @@
 from huggingface_hub import InferenceClient
 import streamlit as st
+from io import BytesIO
+from PIL import Image
+import requests
+import base64
+import time
+import base64
 
 if "draw_model" not in st.session_state:
     st.session_state.draw_model_list = {
@@ -35,7 +41,8 @@ if "draw_model" not in st.session_state:
         "Dalle-proteus-v0.2":"https://api-inference.huggingface.co/models/dataautogpt3/ProteusV0.2",
     }
     st.session_state.draw_model = st.session_state.draw_model_list["Dalle-v1.1"]
-
+    st.session_state.image_choice = True
+    st.session_state.image_choice_name = "Huggingface"
 
 show_app = st.container()
 
@@ -43,20 +50,74 @@ def change_paramater():
     st.session_state.draw_model = st.session_state.draw_model
 
 
-def free_text_to_image(text):
+def image_choice():
+    if st.session_state.image_choice:
+        st.session_state.image_choice = False
+        st.session_state.image_choice_name = "Vispunk"
+    else:
+        st.session_state.image_choice = True
+        st.session_state.image_choice_name = "Huggingface"
+
+
+def huggingface_text_to_image(text):
     client = InferenceClient(model=st.session_state.draw_model_list[st.session_state.draw_model])
     image = client.text_to_image(text)
     return image
 
 
+def query_vispunk(prompt):
+    def request_generate(prompt):
+        url = "https://motion-api.vispunk.com/v1/generate/generate_image"
+        headers = {"Content-Type": "application/json"}
+        data = {"prompt": prompt}
+        try: 
+            response = requests.post(url, headers=headers, json=data)
+            return True,response.json()["task_id"]
+        except Exception as e:
+            st.error(f"Error: {e}")
+            return False,None
+
+
+    def request_image(task_id):
+        url = "https://motion-api.vispunk.com/v1/generate/check_image_task"
+        headers = {"Content-Type": "application/json"}
+        data = {"task_id": task_id}
+        try: 
+            response = requests.post(url, headers=headers, json=data)
+            return True,response.json()["images"][0]
+        except Exception as e:
+            return False,e
+        
+    flag_generate,task_id = request_generate(prompt)
+    if flag_generate:
+        while True:
+            flag_wait,image_src = request_image(task_id)
+            if not flag_wait:
+                time.sleep(1)
+            else:
+                image_data = base64.b64decode(image_src)
+                image = BytesIO(image_data)
+                return True,image
+    else:
+        return False,task_id
+    
+
 def main(prompt):
     show_app.write("**You:** " + prompt)
-    image = free_text_to_image(prompt)
-    show_app.image(image,use_column_width=True)
+    if st.session_state.image_choice:
+        image = huggingface_text_to_image(prompt)
+    else:
+        flag,image = query_vispunk(prompt)
+    show_app.image(image,caption=prompt,use_column_width=True)
 
 
 with st.sidebar:
-    st.session_state.draw_model = st.selectbox('Draw Models', sorted(st.session_state.draw_model_list.keys(),key=lambda x:x.split("-")[0]),on_change=change_paramater)
+    st.session_state.image_choice = st.toggle(st.session_state.image_choice_name,value=st.session_state.image_choice,on_change=image_choice)
+    if st.session_state.image_choice:
+        st.session_state.draw_model = st.selectbox('Draw Models', sorted(st.session_state.draw_model_list.keys(),key=lambda x:x.split("-")[0]),on_change=change_paramater)
+    else:
+        pass
+
 
 prompt = st.chat_input("Send your prompt")
 if prompt:
