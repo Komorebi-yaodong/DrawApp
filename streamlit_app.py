@@ -41,31 +41,26 @@ if "draw_model" not in st.session_state:
         "Dalle-proteus-v0.2":"https://api-inference.huggingface.co/models/dataautogpt3/ProteusV0.2",
     }
     st.session_state.draw_model = st.session_state.draw_model_list["Dalle-v1.1"]
-    st.session_state.image_choice = True
-    st.session_state.image_choice_name = "Huggingface"
+    st.session_state.image_choice_list = ["Free Dalle3", "Huggingface", "Vispunk"]
+    st.session_state.image_choice = st.session_state.image_choice_list[0]
 
 show_app = st.container()
 
 def change_paramater():
     st.session_state.draw_model = st.session_state.draw_model
+    st.session_state.image_choice = st.session_state.image_choice
 
-
-def image_choice():
-    if st.session_state.image_choice:
-        st.session_state.image_choice = False
-        st.session_state.image_choice_name = "Vispunk"
-    else:
-        st.session_state.image_choice = True
-        st.session_state.image_choice_name = "Huggingface"
 
 
 def huggingface_text_to_image(text):
+    print("huggingface work")
     client = InferenceClient(model=st.session_state.draw_model_list[st.session_state.draw_model])
     image = client.text_to_image(text)
     return image
 
 
 def query_vispunk(prompt):
+    print("vispunk work")
     def request_generate(prompt):
         url = "https://motion-api.vispunk.com/v1/generate/generate_image"
         headers = {"Content-Type": "application/json"}
@@ -100,20 +95,48 @@ def query_vispunk(prompt):
                 return True,image
     else:
         return False,task_id
-    
+
+
+def query_free_dalle3(prompt):
+    print("free dalle3 work")
+    url = "https://api-collect.idcdun.com/v1/images/generations"
+    params = {
+        'prompt': prompt,
+        'size': '1024x1024',
+        'n': '1',
+        'model': 'dall-e-3'
+    }
+    start = time.time()
+    response = requests.get(url, params=params)
+    data = response.json()
+
+    # 获取返回结果中的URL
+    generated_url = data['data'][0]['url']
+
+    # 发起第二个GET请求
+    response_image = requests.get(generated_url)
+    end = time.time()
+    st.write(f"Time taken: {end - start} s")
+
+    return response_image.content
+
 
 def main(prompt):
     show_app.write("**You:** " + prompt)
-    if st.session_state.image_choice:
+    if st.session_state.image_choice == st.session_state.image_choice_list[0]:
+        image = query_free_dalle3(prompt)
+    elif st.session_state.image_choice == st.session_state.image_choice_list[1]:
         image = huggingface_text_to_image(prompt)
-    else:
+    elif st.session_state.image_choice == st.session_state.image_choice_list[2]:
         flag,image = query_vispunk(prompt)
+    else:
+        pass
     show_app.image(image,caption=prompt,use_column_width=True)
 
 
 with st.sidebar:
-    st.session_state.image_choice = st.toggle(st.session_state.image_choice_name,value=st.session_state.image_choice,on_change=image_choice)
-    if st.session_state.image_choice:
+    st.session_state.image_choice = st.selectbox("Providers",st.session_state.image_choice_list,on_change=change_paramater)
+    if st.session_state.image_choice == st.session_state.image_choice_list[1]:
         st.session_state.draw_model = st.selectbox('Draw Models', sorted(st.session_state.draw_model_list.keys(),key=lambda x:x.split("-")[0]),on_change=change_paramater)
     else:
         pass
@@ -122,3 +145,5 @@ with st.sidebar:
 prompt = st.chat_input("Send your prompt")
 if prompt:
     main(prompt)
+
+change_paramater()
