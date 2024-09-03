@@ -23,7 +23,6 @@ if "resolution" not in st.session_state:
 
 
 show_input = st.container()
-show_progress = st.progress(0.0)
 show_app = st.container()
 
 
