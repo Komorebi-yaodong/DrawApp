@@ -1,4 +1,5 @@
 from datetime import datetime
+import concurrent.futures
 import streamlit as st
 import requests
 import json
@@ -42,7 +43,6 @@ def generate_image(prompt,resolution):
         return response.json()
 
     def get_image(queue_res):
-            print(queue_res)
             url = queue_res["data"][0]["url"]
             resp = requests.get(url)
             if resp.status_code != 200:
@@ -64,17 +64,47 @@ def show_images(prompt,images,time_delta):
                 st.write(f"**Time**: {time_delta} seconds")
 
 
-def t2i_input(prompt,number=st.session_state.img_num,resolution=st.session_state.resolution):
+# def t2i_input(prompt,number=st.session_state.img_num,resolution=st.session_state.resolution):
+#     start = time.time()
+#     images = []
+#     names = []
+#     for i in range(number):
+#         name,image = generate_image(prompt,resolution)
+#         if image is None: 
+#             st.error(name)
+#         names.append(name)
+#         images.append(image)
+
+#     end = time.time()
+#     show_images(prompt,images,end-start)
+
+
+def t2i_input(prompt, number=st.session_state.img_num, resolution=st.session_state.resolution):
     start = time.time()
     images = []
     names = []
-    for i in range(number):
-        name,image = generate_image(prompt,resolution)
-        if image is None: 
-            st.error(name)
-        names.append(name)
-        images.append(image)
 
+    # 定义生成图像的任务
+    def generate_image_task(i):
+        return generate_image(prompt, resolution)
+
+    # 使用 ThreadPoolExecutor 并行执行任务
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        # 提交所有任务
+        future_to_index = {executor.submit(generate_image_task, i): i for i in range(number)}
+        
+        for future in concurrent.futures.as_completed(future_to_index):
+            index = future_to_index[future]
+            try:
+                name, image = future.result()
+                if image is None:
+                    st.error(name)
+                names.append(name)
+                images.append(image)
+            except Exception as exc:
+                st.error(f'生成图像失败: {exc}')
+    
+    # 计算总用时
     end = time.time()
     show_images(prompt,images,end-start)
 
