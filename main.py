@@ -6,6 +6,8 @@ import json
 import time
 
 
+st.set_page_config(layout="wide")
+
 st.write("<h2> Draw-T2I""</h2>",unsafe_allow_html=True)
 
 resolution_list = {
@@ -18,7 +20,7 @@ resolution_list = {
 
 
 if "img_num" not in st.session_state:
-    st.session_state.img_num = 1
+    st.session_state.img_num = 4
 if "resolution" not in st.session_state:
     st.session_state.resolution = list(resolution_list.keys())[0]
 
@@ -55,28 +57,15 @@ def generate_image(prompt,resolution):
 
 
 @st.cache_data
-def show_images(prompt,images,time_delta):
+def show_images(prompt,images,number,time_delta):
     with show_app:
-        with st.container(border=True):
-            with st.expander(prompt):
-                st.image(images)
-                # st.write(f"**Prompt**: {prompt}")
-                st.write(f"**Time**: {time_delta} seconds")
-
-
-# def t2i_input(prompt,number=st.session_state.img_num,resolution=st.session_state.resolution):
-#     start = time.time()
-#     images = []
-#     names = []
-#     for i in range(number):
-#         name,image = generate_image(prompt,resolution)
-#         if image is None: 
-#             st.error(name)
-#         names.append(name)
-#         images.append(image)
-
-#     end = time.time()
-#     show_images(prompt,images,end-start)
+        with st.container(border=False):
+            st.write(f"**Prompt**: {prompt}")
+            idx = st.columns(number)
+            for i in range(number):
+                idx[i].image(images[i],caption=f"{i+1}")
+            # st.image(images)
+            st.write(f"**Time**: {time_delta} seconds")
 
 
 def t2i_input(prompt, number=st.session_state.img_num, resolution=st.session_state.resolution):
@@ -106,12 +95,12 @@ def t2i_input(prompt, number=st.session_state.img_num, resolution=st.session_sta
     
     # 计算总用时
     end = time.time()
-    show_images(prompt,images,end-start)
+    show_images(prompt,images,number,end-start)
 
 
 with st.sidebar:
     st.session_state.resolution = st.selectbox("**Resolution**",options=resolution_list)
-    st.session_state.img_num = st.slider(label="**Image Number**",min_value=1,max_value=4,step=1)
+    st.session_state.img_num = st.slider(label="**Image Number**",min_value=1,max_value=8,value=4,step=1)
 
 prompt = st.chat_input("Send your prompt")
 if prompt:
